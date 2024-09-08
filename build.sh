@@ -10,7 +10,6 @@ if [ -z "$VERSION" ]; then
 fi
 
 docker buildx build \
-  --push \
   --platform linux/amd64 \
   --build-arg BUILDPLATFORM=linux/amd64 \
   --build-arg TARGETPLATFORM=linux/amd64 \
@@ -19,4 +18,6 @@ docker buildx build \
   .
 
 docker tag geekdada/snell-server:$VERSION geekdada/snell-server:latest
+
+docker push geekdada/snell-server:$VERSION
 docker push geekdada/snell-server:latest

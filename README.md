@@ -22,8 +22,9 @@ All available versions are listed in [tags](https://hub.docker.com/r/geekdada/sn
 docker run -e PSK=<your_psk_here> -p <your_host_port_here>:9102 --restart unless-stopped -d geekdada/snell-server:latest
 ```
 
-If you want to use surge ponte
-```
+If you want to use the service as a Surge Ponte relay server, exposing all ports is recommended:
+
+```bash
 docker run -e PSK=<your_psk_here> --name snell-v4 --restart unless-stopped --network host -d geekdada/snell-server:latest
 ```
 
