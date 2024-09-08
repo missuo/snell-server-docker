@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM tonistiigi/xx AS xx
+FROM --platform=$BUILDPLATFORM tonistiigi/xx:latest AS xx
 
 FROM --platform=$BUILDPLATFORM frolvlad/alpine-glibc:latest AS build
 
