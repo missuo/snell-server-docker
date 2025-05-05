@@ -34,7 +34,7 @@ check_docker() {
 
 # Function to generate random passwords
 generate_password() {
-    openssl rand -base64 32
+    openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32
 }
 
 # Function to setup Snell + ShadowTLS
@@ -55,9 +55,9 @@ setup_snell_shadowtls() {
     local shadowtls_password=$(generate_password)
     
     # Update compose file with passwords and custom port
-    sed -i "s/PSK=CHANGE_ME/PSK=$snell_password/" compose.yaml
-    sed -i "s/PASSWORD=CHANGE_ME/PASSWORD=$shadowtls_password/" compose.yaml
-    sed -i "s/LISTEN=0.0.0.0:8443/LISTEN=0.0.0.0:$port/" compose.yaml
+    sed -i "s/PSK=CHANGE_ME/PSK=$snell_password/g" compose.yaml
+    sed -i "s/PASSWORD=CHANGE_ME/PASSWORD=$shadowtls_password/g" compose.yaml
+    sed -i "s/LISTEN=0.0.0.0:8443/LISTEN=0.0.0.0:$port/g" compose.yaml
     
     # Start containers
     docker compose up -d
@@ -95,9 +95,12 @@ setup_shadowsocks_shadowtls() {
     local shadowtls_password=$(generate_password)
     
     # Update compose file with passwords and custom port
-    sed -i "s/PASSWORD=CHANGE_ME/PASSWORD=$ss_password/" compose.yaml
-    sed -i "0,/PASSWORD=CHANGE_ME/s//PASSWORD=$shadowtls_password/" compose.yaml
-    sed -i "s/LISTEN=0.0.0.0:8443/LISTEN=0.0.0.0:$port/" compose.yaml
+    # Replace first occurrence for shadowsocks password
+    sed -i "0,/PASSWORD=CHANGE_ME/s//PASSWORD=$ss_password/g" compose.yaml
+    # Replace second occurrence for shadowtls password (find next occurrence)
+    sed -i "/PASSWORD=CHANGE_ME/s//PASSWORD=$shadowtls_password/g" compose.yaml
+    # Update port
+    sed -i "s/LISTEN=0.0.0.0:8443/LISTEN=0.0.0.0:$port/g" compose.yaml
     
     # Start containers
     docker compose up -d
@@ -137,11 +140,11 @@ setup_xray_shadowtls() {
     local shadowtls_password=$(generate_password)
     
     # Update config.json with password
-    sed -i "s/\"password\": \"CHANGE_ME\"/\"password\": \"$ss_password\"/" config.json
+    sed -i "s/\"password\": \"CHANGE_ME\"/\"password\": \"$ss_password\"/g" config.json
     
     # Update compose file with shadowtls password and custom port
-    sed -i "s/PASSWORD=CHANGE_ME/PASSWORD=$shadowtls_password/" compose.yaml
-    sed -i "s/LISTEN=0.0.0.0:8443/LISTEN=0.0.0.0:$port/" compose.yaml
+    sed -i "s/PASSWORD=CHANGE_ME/PASSWORD=$shadowtls_password/g" compose.yaml
+    sed -i "s/LISTEN=0.0.0.0:8443/LISTEN=0.0.0.0:$port/g" compose.yaml
     
     # Start containers
     docker compose up -d
