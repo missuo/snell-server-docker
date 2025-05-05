@@ -79,3 +79,7 @@ my-snell = snell, your-server-ip, 8888, psk=your-snell-password, version=4, tfo=
 [Proxy]
 my-shadowsocks = ss, your-server-ip, 8443, encrypt-method=chacha20-ietf-poly1305, password=shadowsocks-pass, reuse=true, shadow-tls-password=shadowtls-pass, shadow-tls-version=3, shadow-tls-sni=weather-data.apple.com
 ```
+
+### Shadowrocket
+
+Of course, Shadowrocket also supports ShadowTLS. You can choose Shadowrocket as your client, but you may need to fill in the configuration yourself.
