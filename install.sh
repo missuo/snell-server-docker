@@ -197,12 +197,11 @@ setup_shadowsocks_shadowtls() {
     local ss_password=$(generate_password)
     local shadowtls_password=$(generate_password)
     
-    # Update compose file with passwords and custom port
-    # Changed delimiter from / to # to avoid conflicts with password
     # Replace first occurrence for shadowsocks password
-    sed -i "0,#PASSWORD=CHANGE_ME#s##PASSWORD=$ss_password#g" compose.yaml
+    sed -i "0,/PASSWORD=CHANGE_ME/s|PASSWORD=CHANGE_ME|PASSWORD=$ss_password|" compose.yaml
+
     # Replace second occurrence for shadowtls password (find next occurrence)
-    sed -i "#PASSWORD=CHANGE_ME#s##PASSWORD=$shadowtls_password#g" compose.yaml
+    sed -i "/PASSWORD=CHANGE_ME/s|PASSWORD=CHANGE_ME|PASSWORD=$shadowtls_password|" compose.yaml
     # Update port
     sed -i "s#LISTEN=0.0.0.0:8443#LISTEN=0.0.0.0:$port#g" compose.yaml
     
