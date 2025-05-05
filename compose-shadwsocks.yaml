@@ -1,0 +1,23 @@
+services:
+  shadowsocks:
+    image: shadowsocks/shadowsocks-libev
+    container_name: shadowsocks-raw
+    restart: always
+    network_mode: "host"
+    environment:
+      - SERVER_PORT=24000
+      - SERVER_ADDR=127.0.0.1
+      - METHOD=chacha20-ietf-poly1305
+      - PASSWORD=CHANGE_ME
+
+  shadow-tls:
+    image: ghcr.io/ihciah/shadow-tls:latest
+    restart: always
+    network_mode: "host"
+    environment:
+      - MODE=server
+      - LISTEN=0.0.0.0:8443
+      - SERVER=127.0.0.1:24000
+      - TLS=weather-data.apple.com:443
+      - PASSWORD=CHANGE_ME
+      - V3=1
