@@ -1,0 +1,18 @@
+{
+    "inbounds": [
+        {
+            "port": 24000,
+            "protocol": "shadowsocks",
+            "settings": {
+                "method": "2022-blake3-chacha20-poly1305",
+                "password": "CHANGE_ME",
+                "network": "tcp,udp"
+            }
+        }
+    ],
+    "outbounds": [
+        {
+            "protocol": "freedom"
+        }
+    ]
+}
