@@ -11,6 +11,7 @@ services:
 
   shadow-tls:
     image: ghcr.io/ihciah/shadow-tls:latest
+    container_name: shadow-tls
     restart: always
     network_mode: "host"
     environment:
@@ -20,3 +21,5 @@ services:
       - TLS=weather-data.apple.com:443
       - PASSWORD=CHANGE_ME
       - V3=1
+    depends_on:
+      - snell-server
