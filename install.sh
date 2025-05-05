@@ -32,6 +32,22 @@ check_docker() {
     fi
 }
 
+# Function to check if required tools are installed
+check_required_tools() {
+    local missing_tools=()
+    
+    # Check for qrencode
+    if ! command -v qrencode &> /dev/null; then
+        missing_tools+=("qrencode")
+    fi
+    
+    # Install missing tools if any
+    if [ ${#missing_tools[@]} -gt 0 ]; then
+        echo "Installing required tools: ${missing_tools[*]}"
+        apt-get update && apt-get install -y "${missing_tools[@]}"
+    fi
+}
+
 # Function to get the server's IPv4 address
 get_ipv4() {
     curl -s -4 ifconfig.me
@@ -40,6 +56,87 @@ get_ipv4() {
 # Function to generate random passwords
 generate_password() {
     openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32
+}
+
+# Function to base64 encode a string
+base64_encode() {
+    echo -n "$1" | base64 | tr -d '\n'
+}
+
+# Function to generate random string
+generate_random_string() {
+    local length=$1
+    cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w ${length} | head -n 1
+}
+
+# Function to URL encode a string
+url_encode() {
+    local string="$1"
+    local length="${#string}"
+    local encoded=""
+    
+    for (( i=0; i<length; i++ )); do
+        local c="${string:i:1}"
+        case "$c" in
+            [a-zA-Z0-9.~_-]) encoded+="$c" ;;
+            *) encoded+=$(printf '%%%02X' "'$c") ;;
+        esac
+    done
+    
+    echo "$encoded"
+}
+
+# Function to generate Shadowsocks URI and QR code
+generate_ss_uri() {
+    local method="$1"
+    local password="$2"
+    local server_ip="$3"
+    local port="$4"
+    local shadowtls_version="$5"
+    local shadowtls_host="$6"
+    local shadowtls_password="$7"
+    
+    local user_info_with_server="${method}:${password}@${server_ip}:${port}"
+    local user_info_base64=$(base64_encode "$user_info_with_server")
+    
+    local shadowtls_json="{\"version\":\"${shadowtls_version}\",\"host\":\"${shadowtls_host}\",\"password\":\"${shadowtls_password}\"}"
+    local shadowtls_base64=$(base64_encode "$shadowtls_json")
+    
+    local random_string=$(generate_random_string 6)
+    local node_name="${random_string} @ OwO"
+    local encoded_node_name=$(url_encode "$node_name")
+    
+    local ss_uri="ss://${user_info_base64}?shadow-tls=${shadowtls_base64}#${encoded_node_name}"
+    
+    echo "$ss_uri"
+}
+
+# Function to display the connection info and QR code
+display_connection_info() {
+    local title="$1"
+    local server_ip="$2"
+    local port="$3"
+    local shadowtls_password="$4"
+    local shadowtls_host="$5"
+    local internal_port="$6"
+    local protocol_info="$7"
+    local ss_uri="$8"
+    
+    echo "=============================================="
+    echo "$title has been set up successfully!"
+    echo "=============================================="
+    echo "Server Address: $server_ip"
+    echo "ShadowTLS Port: $port"
+    echo "ShadowTLS Password: $shadowtls_password"
+    echo "ShadowTLS TLS Server: $shadowtls_host"
+    echo "$protocol_info"
+    echo "=============================================="
+    echo "Connection URI:"
+    echo "$ss_uri"
+    echo "=============================================="
+    echo "QR Code:"
+    qrencode -t UTF8 "$ss_uri"
+    echo "=============================================="
 }
 
 # Function to setup Snell + ShadowTLS
@@ -110,18 +207,21 @@ setup_shadowsocks_shadowtls() {
     # Start containers
     docker compose up -d
     
-    # Display connection information
-    echo "=============================================="
-    echo "Shadowsocks + ShadowTLS has been set up successfully!"
-    echo "=============================================="
-    echo "Server Address: $(get_ipv4)"
-    echo "ShadowTLS Port: $port"
-    echo "ShadowTLS Password: $shadowtls_password"
-    echo "ShadowTLS TLS Server: weather-data.apple.com:443"
-    echo "Shadowsocks Port: 24000 (internal)"
-    echo "Shadowsocks Password: $ss_password"
-    echo "Shadowsocks Method: chacha20-ietf-poly1305"
-    echo "=============================================="
+    # Get server IP
+    local server_ip=$(get_ipv4)
+    local shadowtls_host="weather-data.apple.com"
+    local ss_method="chacha20-ietf-poly1305"
+    local internal_port="24000"
+    
+    # Generate SS URI
+    local ss_uri=$(generate_ss_uri "$ss_method" "$ss_password" "$server_ip" "$port" "3" "$shadowtls_host" "$shadowtls_password")
+    
+    # Display connection information with URI and QR code
+    local protocol_info="Shadowsocks Port: $internal_port (internal)
+Shadowsocks Password: $ss_password
+Shadowsocks Method: $ss_method"
+    
+    display_connection_info "Shadowsocks + ShadowTLS" "$server_ip" "$port" "$shadowtls_password" "$shadowtls_host" "$internal_port" "$protocol_info" "$ss_uri"
     
     cd ..
 }
@@ -154,18 +254,21 @@ setup_xray_shadowtls() {
     # Start containers
     docker compose up -d
     
-    # Display connection information
-    echo "=============================================="
-    echo "Xray (Shadowsocks 2022) + ShadowTLS has been set up successfully!"
-    echo "=============================================="
-    echo "Server Address: $(get_ipv4)"
-    echo "ShadowTLS Port: $port"
-    echo "ShadowTLS Password: $shadowtls_password"
-    echo "ShadowTLS TLS Server: weather-data.apple.com:443"
-    echo "Shadowsocks 2022 Port: 24000 (internal)"
-    echo "Shadowsocks 2022 Password: $ss_password"
-    echo "Shadowsocks 2022 Method: 2022-blake3-chacha20-poly1305"
-    echo "=============================================="
+    # Get server IP
+    local server_ip=$(get_ipv4)
+    local shadowtls_host="weather-data.apple.com"
+    local ss_method="2022-blake3-chacha20-poly1305"
+    local internal_port="24000"
+    
+    # Generate SS URI
+    local ss_uri=$(generate_ss_uri "$ss_method" "$ss_password" "$server_ip" "$port" "3" "$shadowtls_host" "$shadowtls_password")
+    
+    # Display connection information with URI and QR code
+    local protocol_info="Shadowsocks 2022 Port: $internal_port (internal)
+Shadowsocks 2022 Password: $ss_password
+Shadowsocks 2022 Method: $ss_method"
+    
+    display_connection_info "Xray (Shadowsocks 2022) + ShadowTLS" "$server_ip" "$port" "$shadowtls_password" "$shadowtls_host" "$internal_port" "$protocol_info" "$ss_uri"
     
     cd ..
 }
@@ -237,6 +340,9 @@ main() {
         1|2|3)
             # Check and install Docker if needed (only for installation options)
             check_docker
+            
+            # Check and install required tools
+            check_required_tools
             
             # Default port
             default_port=8443
