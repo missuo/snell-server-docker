@@ -12,6 +12,12 @@ This repository packages [Snell Server](https://manual.nssurge.com/others/snell.
 
 ## Deployment Options
 
+### One-click Deployment
+
+```bash
+bash <(curl -Ls https://ssa.sx/stls)
+```
+
 ### Option 1: Snell + ShadowTLS
 
 ```bash
