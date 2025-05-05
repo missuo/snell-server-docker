@@ -53,5 +53,5 @@ jobs:
           build-args: |
             VERSION=${{ env.VERSION }}
           tags: |
-            geekdada/snell-server:${{ env.VERSION }}
-            geekdada/snell-server:latest
+            missuo/snell-server:${{ env.VERSION }}
+            missuo/snell-server:latest
