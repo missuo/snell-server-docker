@@ -20,6 +20,7 @@ services:
       - SERVER=127.0.0.1:24000
       - TLS=weather-data.apple.com:443
       - PASSWORD=CHANGE_ME
-      - V3=1
+      - V3=true
+      - STRICT=true
     depends_on:
       - shadowsocks
