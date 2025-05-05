@@ -14,9 +14,12 @@ RUN xx-info env && wget -q -O "snell-server.zip" $(/get_url.sh ${VERSION} $(xx-i
 FROM frolvlad/alpine-glibc:alpine-3.16
 
 ENV TZ=UTC
+ENV LISTEN=127.0.0.1:9102
+ENV PSK=
+ENV IPV6=true
 
 COPY --from=build /snell-server /usr/bin/snell-server
 COPY start.sh /start.sh
 RUN apk add --update --no-cache libstdc++
 
-ENTRYPOINT /start.sh
+ENTRYPOINT ["/start.sh"]

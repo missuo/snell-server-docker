@@ -1,0 +1,22 @@
+services:
+  snell-server:
+    image: missuo/snell-server:latest
+    container_name: snell-server
+    restart: always
+    network_mode: "host"
+    environment:
+      - LISTEN=127.0.0.1:24000
+      - PSK=CHANGE_ME
+      - IPV6=true
+
+  shadow-tls:
+    image: ghcr.io/ihciah/shadow-tls:latest
+    restart: always
+    network_mode: "host"
+    environment:
+      - MODE=server
+      - LISTEN=0.0.0.0:8443
+      - SERVER=127.0.0.1:24000
+      - TLS=weather-data.apple.com:443
+      - PASSWORD=CHANGE_ME
+      - V3=1
