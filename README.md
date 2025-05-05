@@ -23,8 +23,7 @@ cd shadowtls-snell
 wget -O compose.yaml https://raw.githubusercontent.com/missuo/snell-server-docker/refs/heads/master/compose-snell.yaml
 
 # Generate random password for enhanced security
-PASSWORD=$(openssl rand -base64 32)
-echo "Generated password: $PASSWORD"
+openssl rand -base64 32
 
 # Edit the compose file with your configuration
 nano compose.yaml
@@ -47,15 +46,10 @@ cd shadowtls-shadowsocks
 wget -O compose.yaml https://raw.githubusercontent.com/missuo/snell-server-docker/refs/heads/master/compose-shadowsocks.yaml
 
 # Generate random password and automatically update compose.yaml
-PASSWORD=$(openssl rand -base64 32)
-echo "Generated password: $PASSWORD"
-ESCAPED_PASSWORD=$(echo "$PASSWORD" | sed 's/[\/&]/\\&/g')
-sed -i "s/PASSWORD=CHANGE_ME/PASSWORD=$ESCAPED_PASSWORD/" compose.yaml
-if [ $? -eq 0 ]; then
-    echo "Password successfully updated in compose.yaml"
-else
-    perl -i -pe "s/PASSWORD=CHANGE_ME/PASSWORD=$PASSWORD/g" compose.yaml
-fi
+openssl rand -base64 32
+
+# Edit the compose.yaml with your configuration
+nano compose.yaml
 
 # Start the containers
 docker compose up -d
@@ -63,6 +57,30 @@ docker compose up -d
 # Check logs
 docker compose logs
 ```
+
+### Option 3: Xray (Shadowsocks 2022) + ShadowTLS
+
+```bash
+# Create directory and navigate to it
+mkdir shadowtls-xray
+cd shadowtls-xray
+
+# Download compose file
+wget -O compose.yaml https://raw.githubusercontent.com/missuo/snell-server-docker/refs/heads/master/compose-shadowsocks2022.yaml
+
+# Add config.json
+wget -O config.json https://raw.githubusercontent.com/missuo/snell-server-docker/refs/heads/master/config-shadowsocks2022.json
+
+# Edit the config.json with your configuration
+nano config.json
+
+# Start the containers
+docker compose up -d
+
+# Check logs
+docker compose logs
+```
+
 
 ## Client Configuration
 
@@ -79,13 +97,13 @@ my-snell = snell, your-server-ip, 8888, psk=your-snell-password, version=4, tfo=
 
 #### For Shadowsocks + ShadowTLS:
 
-> Surge User
 ```ini
 [Proxy]
 my-shadowsocks = ss, your-server-ip, 8443, encrypt-method=chacha20-ietf-poly1305, password=shadowsocks-pass, reuse=true, shadow-tls-password=shadowtls-pass, shadow-tls-version=3, shadow-tls-sni=weather-data.apple.com
 ```
 
-> Clash Meta (Minoho core) User
+### Clash Meta (Minoho)
+
 ```yaml
 proxies:
 - name: "your-proxy-name"
