@@ -21,3 +21,5 @@ services:
       - TLS=weather-data.apple.com:443
       - PASSWORD=CHANGE_ME
       - V3=1
+    depends_on:
+      - shadowsocks
