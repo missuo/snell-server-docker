@@ -32,6 +32,11 @@ check_docker() {
     fi
 }
 
+# Function to get the server's IPv4 address
+get_ipv4() {
+    curl -s -4 ifconfig.me
+}
+
 # Function to generate random passwords
 generate_password() {
     openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32
@@ -66,7 +71,7 @@ setup_snell_shadowtls() {
     echo "=============================================="
     echo "Snell + ShadowTLS has been set up successfully!"
     echo "=============================================="
-    echo "Server Address: $(curl -s ifconfig.me)"
+    echo "Server Address: $(get_ipv4)"
     echo "ShadowTLS Port: $port"
     echo "ShadowTLS Password: $shadowtls_password"
     echo "ShadowTLS TLS Server: weather-data.apple.com:443"
@@ -109,7 +114,7 @@ setup_shadowsocks_shadowtls() {
     echo "=============================================="
     echo "Shadowsocks + ShadowTLS has been set up successfully!"
     echo "=============================================="
-    echo "Server Address: $(curl -s ifconfig.me)"
+    echo "Server Address: $(get_ipv4)"
     echo "ShadowTLS Port: $port"
     echo "ShadowTLS Password: $shadowtls_password"
     echo "ShadowTLS TLS Server: weather-data.apple.com:443"
@@ -153,7 +158,7 @@ setup_xray_shadowtls() {
     echo "=============================================="
     echo "Xray (Shadowsocks 2022) + ShadowTLS has been set up successfully!"
     echo "=============================================="
-    echo "Server Address: $(curl -s ifconfig.me)"
+    echo "Server Address: $(get_ipv4)"
     echo "ShadowTLS Port: $port"
     echo "ShadowTLS Password: $shadowtls_password"
     echo "ShadowTLS TLS Server: weather-data.apple.com:443"
@@ -165,6 +170,44 @@ setup_xray_shadowtls() {
     cd ..
 }
 
+# Function to uninstall any ShadowTLS setup
+uninstall_shadowtls() {
+    echo "Uninstalling ShadowTLS setups..."
+    
+    # Check and uninstall Snell + ShadowTLS
+    if [ -d "shadowtls-snell" ]; then
+        echo "Removing Snell + ShadowTLS..."
+        cd shadowtls-snell
+        docker compose down
+        cd ..
+        rm -rf shadowtls-snell
+    fi
+    
+    # Check and uninstall Shadowsocks + ShadowTLS
+    if [ -d "shadowtls-shadowsocks" ]; then
+        echo "Removing Shadowsocks + ShadowTLS..."
+        cd shadowtls-shadowsocks
+        docker compose down
+        cd ..
+        rm -rf shadowtls-shadowsocks
+    fi
+    
+    # Check and uninstall Xray + ShadowTLS
+    if [ -d "shadowtls-xray" ]; then
+        echo "Removing Xray (Shadowsocks 2022) + ShadowTLS..."
+        cd shadowtls-xray
+        docker compose down
+        cd ..
+        rm -rf shadowtls-xray
+    fi
+    
+    # Clean up unused Docker resources
+    echo "Cleaning up Docker resources..."
+    docker system prune -af
+    
+    echo "Uninstallation completed successfully!"
+}
+
 # Main function
 main() {
     # Clear screen
@@ -173,44 +216,49 @@ main() {
     # Check if running as root
     check_root
     
-    # Check and install Docker if needed
-    check_docker
-    
     # Display welcome message
     echo "====================================================="
     echo "       ShadowTLS Proxy Installation Script           "
     echo "====================================================="
     echo ""
-    echo "Please select an installation option:"
-    echo "1) Snell + ShadowTLS"
-    echo "2) Shadowsocks + ShadowTLS"
-    echo "3) Xray (Shadowsocks 2022) + ShadowTLS"
-    echo "4) Exit"
+    echo "Please select an option:"
+    echo "1) Install Snell + ShadowTLS"
+    echo "2) Install Shadowsocks + ShadowTLS"
+    echo "3) Install Xray (Shadowsocks 2022) + ShadowTLS"
+    echo "4) Uninstall All ShadowTLS Setups"
+    echo "5) Exit"
     echo ""
     
     # Get user choice
-    read -p "Enter your choice (1-4): " choice
-    
-    # Default port
-    default_port=8443
-    
-    # Ask for custom port
-    read -p "Enter ShadowTLS port (default: $default_port): " custom_port
-    port=${custom_port:-$default_port}
+    read -p "Enter your choice (1-5): " choice
     
     # Process user choice
     case $choice in
-        1)
-            setup_snell_shadowtls $port
-            ;;
-        2)
-            setup_shadowsocks_shadowtls $port
-            ;;
-        3)
-            setup_xray_shadowtls $port
+        1|2|3)
+            # Check and install Docker if needed (only for installation options)
+            check_docker
+            
+            # Default port
+            default_port=8443
+            
+            # Ask for custom port
+            read -p "Enter ShadowTLS port (default: $default_port): " custom_port
+            port=${custom_port:-$default_port}
+            
+            # Call appropriate setup function
+            if [ "$choice" -eq "1" ]; then
+                setup_snell_shadowtls $port
+            elif [ "$choice" -eq "2" ]; then
+                setup_shadowsocks_shadowtls $port
+            elif [ "$choice" -eq "3" ]; then
+                setup_xray_shadowtls $port
+            fi
             ;;
         4)
-            echo "Exiting installation. No changes were made."
+            uninstall_shadowtls
+            ;;
+        5)
+            echo "Exiting. No changes were made."
             exit 0
             ;;
         *)
@@ -220,8 +268,7 @@ main() {
     esac
     
     echo ""
-    echo "Installation completed successfully!"
-    echo "To check logs, navigate to the installation directory and run: docker compose logs"
+    echo "Operation completed successfully!"
 }
 
 # Run main function
