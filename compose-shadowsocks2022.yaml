@@ -1,0 +1,24 @@
+services:
+  xray-shadowsocks:
+    image: ghcr.io/xtls/xray-core:latest
+    restart: always
+    volumes:
+      - ./config.json:/etc/xray/config.json
+    ports:
+      - "127.0.0.1:24000:24000"
+      - "127.0.0.1:24000:24000/udp"
+
+  shadow-tls:
+    image: ghcr.io/ihciah/shadow-tls:latest
+    restart: always
+    network_mode: "host"
+    environment:
+      - MODE=server
+      - LISTEN=0.0.0.0:8443
+      - SERVER=127.0.0.1:24000
+      - TLS=weather-data.apple.com:443
+      - PASSWORD=CHANGE_ME
+      - V3=true
+      - STRICT=true
+    depends_on:
+      - xray-shadowsocks
