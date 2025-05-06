@@ -7,7 +7,6 @@ YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
-WHITE='\033[1;37m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
@@ -171,11 +170,11 @@ display_connection_info() {
     local ss_uri="$8"
     
     print_header "$title has been set up successfully!"
-    echo -e "${WHITE}Server Address:${NC} ${BOLD}$server_ip${NC}"
-    echo -e "${WHITE}ShadowTLS Port:${NC} ${BOLD}$port${NC}"
-    echo -e "${WHITE}ShadowTLS Password:${NC} ${BOLD}$shadowtls_password${NC}"
-    echo -e "${WHITE}ShadowTLS TLS Server:${NC} ${BOLD}$shadowtls_host${NC}"
-    echo -e "${WHITE}$protocol_info${NC}"
+    echo -e "${BOLD}Server Address:${NC} ${BOLD}$server_ip${NC}"
+    echo -e "${BOLD}ShadowTLS Port:${NC} ${BOLD}$port${NC}"
+    echo -e "${BOLD}ShadowTLS Password:${NC} ${BOLD}$shadowtls_password${NC}"
+    echo -e "${BOLD}ShadowTLS TLS Server:${NC} ${BOLD}$shadowtls_host${NC}"
+    echo -e "${BOLD}$protocol_info${NC}"
     print_header "Connection URI"
     echo -e "${BOLD}$ss_uri${NC}"
     print_header "QR Code"
@@ -242,12 +241,12 @@ setup_snell_shadowtls() {
     
     # Display connection information
     print_header "Snell + ShadowTLS has been set up successfully!"
-    echo -e "${WHITE}Server Address:${NC} ${BOLD}$(get_ipv4)${NC}"
-    echo -e "${WHITE}ShadowTLS Port:${NC} ${BOLD}$port${NC}"
-    echo -e "${WHITE}ShadowTLS Password:${NC} ${BOLD}$shadowtls_password${NC}"
-    echo -e "${WHITE}ShadowTLS TLS Server:${NC} ${BOLD}weather-data.apple.com:443${NC}"
-    echo -e "${WHITE}Snell Port:${NC} ${BOLD}24000${NC} (internal)"
-    echo -e "${WHITE}Snell PSK:${NC} ${BOLD}$snell_password${NC}"
+    echo -e "${BOLD}Server Address:${NC} ${BOLD}$(get_ipv4)${NC}"
+    echo -e "${BOLD}ShadowTLS Port:${NC} ${BOLD}$port${NC}"
+    echo -e "${BOLD}ShadowTLS Password:${NC} ${BOLD}$shadowtls_password${NC}"
+    echo -e "${BOLD}ShadowTLS TLS Server:${NC} ${BOLD}weather-data.apple.com:443${NC}"
+    echo -e "${BOLD}Snell Port:${NC} ${BOLD}24000${NC} (internal)"
+    echo -e "${BOLD}Snell PSK:${NC} ${BOLD}$snell_password${NC}"
     echo -e "${BLUE}===========================================================${NC}"
     
     cd ..
