@@ -80,6 +80,9 @@ wget -O config.json https://raw.githubusercontent.com/missuo/snell-server-docker
 # Edit the config.json with your configuration
 nano config.json
 
+# Edit the compose.yaml with your configuration
+nano compose.yaml
+
 # Start the containers
 docker compose up -d
 
