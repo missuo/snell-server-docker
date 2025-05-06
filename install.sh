@@ -139,6 +139,26 @@ display_connection_info() {
     echo "=============================================="
 }
 
+# Function to verify config file password
+verify_config_password() {
+    local file="$1"
+    local pattern="$2"
+    local expected="$3"
+    local label="$4"
+    
+    echo "Verifying $label password in $file..."
+    local found=$(grep -o "$pattern.*" "$file" | head -1)
+    echo "Expected: $expected"
+    echo "Found in config: $found"
+    
+    if [[ "$found" == *"$expected"* ]]; then
+        echo "✅ Password verified successfully!"
+    else
+        echo "❌ WARNING: Password mismatch detected!"
+    fi
+    echo ""
+}
+
 # Function to setup Snell + ShadowTLS
 setup_snell_shadowtls() {
     local port=$1
@@ -156,11 +176,18 @@ setup_snell_shadowtls() {
     local snell_password=$(generate_password)
     local shadowtls_password=$(generate_password)
     
+    echo "Generated Snell password: $snell_password"
+    echo "Generated ShadowTLS password: $shadowtls_password"
+    
     # Update compose file with passwords and custom port
     # Changed delimiter from / to # to avoid conflicts with password
     sed -i "s#PSK=CHANGE_ME#PSK=$snell_password#g" compose.yaml
     sed -i "s#PASSWORD=CHANGE_ME#PASSWORD=$shadowtls_password#g" compose.yaml
     sed -i "s#LISTEN=0.0.0.0:8443#LISTEN=0.0.0.0:$port#g" compose.yaml
+    
+    # Verify passwords in config file
+    verify_config_password "compose.yaml" "PSK=" "$snell_password" "Snell"
+    verify_config_password "compose.yaml" "PASSWORD=" "$shadowtls_password" "ShadowTLS"
     
     # Start containers
     docker compose up -d
@@ -197,6 +224,9 @@ setup_shadowsocks_shadowtls() {
     local ss_password=$(generate_password)
     local shadowtls_password=$(generate_password)
     
+    echo "Generated Shadowsocks password: $ss_password"
+    echo "Generated ShadowTLS password: $shadowtls_password"
+    
     # Replace first occurrence for shadowsocks password
     sed -i "0,/PASSWORD=CHANGE_ME/s|PASSWORD=CHANGE_ME|PASSWORD=$ss_password|" compose.yaml
 
@@ -204,6 +234,29 @@ setup_shadowsocks_shadowtls() {
     sed -i "/PASSWORD=CHANGE_ME/s|PASSWORD=CHANGE_ME|PASSWORD=$shadowtls_password|" compose.yaml
     # Update port
     sed -i "s#LISTEN=0.0.0.0:8443#LISTEN=0.0.0.0:$port#g" compose.yaml
+    
+    # Verify passwords in config file
+    echo "Verifying Shadowsocks password in compose.yaml..."
+    local found_ss=$(grep -m 1 "PASSWORD=" compose.yaml)
+    echo "Expected: PASSWORD=$ss_password"
+    echo "Found in config: $found_ss"
+    
+    echo "Verifying ShadowTLS password in compose.yaml..."
+    local found_shadowtls=$(grep -m 2 "PASSWORD=" compose.yaml | tail -1)
+    echo "Expected: PASSWORD=$shadowtls_password"
+    echo "Found in config: $found_shadowtls"
+    
+    if [[ "$found_ss" == *"$ss_password"* ]]; then
+        echo "✅ Shadowsocks password verified successfully!"
+    else
+        echo "❌ WARNING: Shadowsocks password mismatch detected!"
+    fi
+    
+    if [[ "$found_shadowtls" == *"$shadowtls_password"* ]]; then
+        echo "✅ ShadowTLS password verified successfully!"
+    else
+        echo "❌ WARNING: ShadowTLS password mismatch detected!"
+    fi
     
     # Start containers
     docker compose up -d
@@ -245,12 +298,19 @@ setup_xray_shadowtls() {
     local ss_password=$(generate_password)
     local shadowtls_password=$(generate_password)
     
+    echo "Generated Shadowsocks 2022 password: $ss_password"
+    echo "Generated ShadowTLS password: $shadowtls_password"
+    
     # Update config.json with password - changed delimiter to # to avoid conflicts
     sed -i "s#\"password\": \"CHANGE_ME\"#\"password\": \"$ss_password\"#g" config.json
     
     # Update compose file with shadowtls password and custom port
     sed -i "s#PASSWORD=CHANGE_ME#PASSWORD=$shadowtls_password#g" compose.yaml
     sed -i "s#LISTEN=0.0.0.0:8443#LISTEN=0.0.0.0:$port#g" compose.yaml
+    
+    # Verify passwords in config files
+    verify_config_password "config.json" "\"password\": " "\"$ss_password\"" "Shadowsocks 2022"
+    verify_config_password "compose.yaml" "PASSWORD=" "$shadowtls_password" "ShadowTLS"
     
     # Start containers
     docker compose up -d
@@ -314,8 +374,8 @@ uninstall_shadowtls() {
 
 # Main function
 main() {
-    # Clear screen
-    clear
+    # Do NOT clear screen to keep all output visible
+    # clear  <-- Removed this line
     
     # Check if running as root
     check_root
