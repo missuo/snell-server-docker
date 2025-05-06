@@ -1,9 +1,57 @@
 #!/bin/bash
 
+# Color definitions
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+BOLD='\033[1m'
+NC='\033[0m' # No Color
+
+# Function to print colored text
+print_colored() {
+    local color="$1"
+    local message="$2"
+    echo -e "${color}${message}${NC}"
+}
+
+# Function to print section headers
+print_header() {
+    local message="$1"
+    echo ""
+    echo -e "${BOLD}${BLUE}===========================================================${NC}"
+    echo -e "${BOLD}${BLUE}  $message${NC}"
+    echo -e "${BOLD}${BLUE}===========================================================${NC}"
+    echo ""
+}
+
+# Function to print success messages
+print_success() {
+    echo -e "${GREEN}✅ $1${NC}"
+}
+
+# Function to print error messages
+print_error() {
+    echo -e "${RED}❌ $1${NC}"
+}
+
+# Function to print warning messages
+print_warning() {
+    echo -e "${YELLOW}⚠️ $1${NC}"
+}
+
+# Function to print info messages
+print_info() {
+    echo -e "${CYAN}ℹ️ $1${NC}"
+}
+
 # Function to check if script is running as root
 check_root() {
     if [ "$(id -u)" -ne 0 ]; then
-        echo "This script must be run as root"
+        print_error "This script must be run as root"
         exit 1
     fi
 }
@@ -11,22 +59,22 @@ check_root() {
 # Function to check if Docker is installed and install if needed
 check_docker() {
     if ! command -v docker &> /dev/null; then
-        echo "Docker is not installed. Installing Docker..."
+        print_info "Docker is not installed. Installing Docker..."
         curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh
         
         # Check if Docker Compose plugin is available
         if ! docker compose version &> /dev/null; then
-            echo "Installing Docker Compose plugin..."
+            print_info "Installing Docker Compose plugin..."
             apt-get update && apt-get install -y docker-compose-plugin
         fi
         
-        echo "Docker installation completed."
+        print_success "Docker installation completed."
     else
-        echo "Docker is already installed."
+        print_success "Docker is already installed."
         
         # Ensure Docker Compose plugin is available
         if ! docker compose version &> /dev/null; then
-            echo "Installing Docker Compose plugin..."
+            print_info "Installing Docker Compose plugin..."
             apt-get update && apt-get install -y docker-compose-plugin
         fi
     fi
@@ -43,7 +91,7 @@ check_required_tools() {
     
     # Install missing tools if any
     if [ ${#missing_tools[@]} -gt 0 ]; then
-        echo "Installing required tools: ${missing_tools[*]}"
+        print_info "Installing required tools: ${missing_tools[*]}"
         apt-get update && apt-get install -y "${missing_tools[@]}"
     fi
 }
@@ -122,21 +170,17 @@ display_connection_info() {
     local protocol_info="$7"
     local ss_uri="$8"
     
-    echo "=============================================="
-    echo "$title has been set up successfully!"
-    echo "=============================================="
-    echo "Server Address: $server_ip"
-    echo "ShadowTLS Port: $port"
-    echo "ShadowTLS Password: $shadowtls_password"
-    echo "ShadowTLS TLS Server: $shadowtls_host"
-    echo "$protocol_info"
-    echo "=============================================="
-    echo "Connection URI:"
-    echo "$ss_uri"
-    echo "=============================================="
-    echo "QR Code:"
+    print_header "$title has been set up successfully!"
+    echo -e "${WHITE}Server Address:${NC} ${BOLD}$server_ip${NC}"
+    echo -e "${WHITE}ShadowTLS Port:${NC} ${BOLD}$port${NC}"
+    echo -e "${WHITE}ShadowTLS Password:${NC} ${BOLD}$shadowtls_password${NC}"
+    echo -e "${WHITE}ShadowTLS TLS Server:${NC} ${BOLD}$shadowtls_host${NC}"
+    echo -e "${WHITE}$protocol_info${NC}"
+    print_header "Connection URI"
+    echo -e "${BOLD}$ss_uri${NC}"
+    print_header "QR Code"
     qrencode -t UTF8 "$ss_uri"
-    echo "=============================================="
+    echo -e "${BLUE}===========================================================${NC}"
 }
 
 # Function to verify config file password
@@ -146,15 +190,15 @@ verify_config_password() {
     local expected="$3"
     local label="$4"
     
-    echo "Verifying $label password in $file..."
+    print_info "Verifying $label password in $file..."
     local found=$(grep -o "$pattern.*" "$file" | head -1)
-    echo "Expected: $expected"
-    echo "Found in config: $found"
+    echo -e "${CYAN}Expected: $expected${NC}"
+    echo -e "${CYAN}Found in config: $found${NC}"
     
     if [[ "$found" == *"$expected"* ]]; then
-        echo "✅ Password verified successfully!"
+        print_success "Password verified successfully!"
     else
-        echo "❌ WARNING: Password mismatch detected!"
+        print_error "WARNING: Password mismatch detected!"
     fi
     echo ""
 }
@@ -163,23 +207,25 @@ verify_config_password() {
 setup_snell_shadowtls() {
     local port=$1
     
-    echo "Setting up Snell + ShadowTLS on port $port..."
+    print_header "Setting up Snell + ShadowTLS on port $port"
     
     # Create directory
     mkdir -p shadowtls-snell
     cd shadowtls-snell
     
     # Download compose file
+    print_info "Downloading configuration files..."
     wget -O compose.yaml https://raw.githubusercontent.com/missuo/snell-server-docker/refs/heads/master/compose-snell.yaml
     
     # Generate passwords
     local snell_password=$(generate_password)
     local shadowtls_password=$(generate_password)
     
-    echo "Generated Snell password: $snell_password"
-    echo "Generated ShadowTLS password: $shadowtls_password"
+    print_info "Generated Snell password: ${BOLD}$snell_password${NC}"
+    print_info "Generated ShadowTLS password: ${BOLD}$shadowtls_password${NC}"
     
     # Update compose file with passwords and custom port
+    print_info "Updating configuration files..."
     # Changed delimiter from / to # to avoid conflicts with password
     sed -i "s#PSK=CHANGE_ME#PSK=$snell_password#g" compose.yaml
     sed -i "s#PASSWORD=CHANGE_ME#PASSWORD=$shadowtls_password#g" compose.yaml
@@ -190,19 +236,19 @@ setup_snell_shadowtls() {
     verify_config_password "compose.yaml" "PASSWORD=" "$shadowtls_password" "ShadowTLS"
     
     # Start containers
+    print_info "Starting containers..."
     docker compose up -d
+    print_success "Containers started successfully!"
     
     # Display connection information
-    echo "=============================================="
-    echo "Snell + ShadowTLS has been set up successfully!"
-    echo "=============================================="
-    echo "Server Address: $(get_ipv4)"
-    echo "ShadowTLS Port: $port"
-    echo "ShadowTLS Password: $shadowtls_password"
-    echo "ShadowTLS TLS Server: weather-data.apple.com:443"
-    echo "Snell Port: 24000 (internal)"
-    echo "Snell PSK: $snell_password"
-    echo "=============================================="
+    print_header "Snell + ShadowTLS has been set up successfully!"
+    echo -e "${WHITE}Server Address:${NC} ${BOLD}$(get_ipv4)${NC}"
+    echo -e "${WHITE}ShadowTLS Port:${NC} ${BOLD}$port${NC}"
+    echo -e "${WHITE}ShadowTLS Password:${NC} ${BOLD}$shadowtls_password${NC}"
+    echo -e "${WHITE}ShadowTLS TLS Server:${NC} ${BOLD}weather-data.apple.com:443${NC}"
+    echo -e "${WHITE}Snell Port:${NC} ${BOLD}24000${NC} (internal)"
+    echo -e "${WHITE}Snell PSK:${NC} ${BOLD}$snell_password${NC}"
+    echo -e "${BLUE}===========================================================${NC}"
     
     cd ..
 }
@@ -211,22 +257,25 @@ setup_snell_shadowtls() {
 setup_shadowsocks_shadowtls() {
     local port=$1
     
-    echo "Setting up Shadowsocks + ShadowTLS on port $port..."
+    print_header "Setting up Shadowsocks + ShadowTLS on port $port"
     
     # Create directory
     mkdir -p shadowtls-shadowsocks
     cd shadowtls-shadowsocks
     
     # Download compose file
+    print_info "Downloading configuration files..."
     wget -O compose.yaml https://raw.githubusercontent.com/missuo/snell-server-docker/refs/heads/master/compose-shadowsocks.yaml
     
     # Generate passwords
     local ss_password=$(generate_password)
     local shadowtls_password=$(generate_password)
     
-    echo "Generated Shadowsocks password: $ss_password"
-    echo "Generated ShadowTLS password: $shadowtls_password"
+    print_info "Generated Shadowsocks password: ${BOLD}$ss_password${NC}"
+    print_info "Generated ShadowTLS password: ${BOLD}$shadowtls_password${NC}"
     
+    # Update compose file with passwords and custom port
+    print_info "Updating configuration files..."
     # Replace first occurrence for shadowsocks password
     sed -i "0,/PASSWORD=CHANGE_ME/s|PASSWORD=CHANGE_ME|PASSWORD=$ss_password|" compose.yaml
 
@@ -236,30 +285,32 @@ setup_shadowsocks_shadowtls() {
     sed -i "s#LISTEN=0.0.0.0:8443#LISTEN=0.0.0.0:$port#g" compose.yaml
     
     # Verify passwords in config file
-    echo "Verifying Shadowsocks password in compose.yaml..."
+    print_info "Verifying Shadowsocks password in compose.yaml..."
     local found_ss=$(grep -m 1 "PASSWORD=" compose.yaml)
-    echo "Expected: PASSWORD=$ss_password"
-    echo "Found in config: $found_ss"
+    echo -e "${CYAN}Expected: PASSWORD=$ss_password${NC}"
+    echo -e "${CYAN}Found in config: $found_ss${NC}"
     
-    echo "Verifying ShadowTLS password in compose.yaml..."
+    print_info "Verifying ShadowTLS password in compose.yaml..."
     local found_shadowtls=$(grep -m 2 "PASSWORD=" compose.yaml | tail -1)
-    echo "Expected: PASSWORD=$shadowtls_password"
-    echo "Found in config: $found_shadowtls"
+    echo -e "${CYAN}Expected: PASSWORD=$shadowtls_password${NC}"
+    echo -e "${CYAN}Found in config: $found_shadowtls${NC}"
     
     if [[ "$found_ss" == *"$ss_password"* ]]; then
-        echo "✅ Shadowsocks password verified successfully!"
+        print_success "Shadowsocks password verified successfully!"
     else
-        echo "❌ WARNING: Shadowsocks password mismatch detected!"
+        print_error "WARNING: Shadowsocks password mismatch detected!"
     fi
     
     if [[ "$found_shadowtls" == *"$shadowtls_password"* ]]; then
-        echo "✅ ShadowTLS password verified successfully!"
+        print_success "ShadowTLS password verified successfully!"
     else
-        echo "❌ WARNING: ShadowTLS password mismatch detected!"
+        print_error "WARNING: ShadowTLS password mismatch detected!"
     fi
     
     # Start containers
+    print_info "Starting containers..."
     docker compose up -d
+    print_success "Containers started successfully!"
     
     # Get server IP
     local server_ip=$(get_ipv4)
@@ -271,9 +322,9 @@ setup_shadowsocks_shadowtls() {
     local ss_uri=$(generate_ss_uri "$ss_method" "$ss_password" "$server_ip" "$port" "3" "$shadowtls_host" "$shadowtls_password")
     
     # Display connection information with URI and QR code
-    local protocol_info="Shadowsocks Port: $internal_port (internal)
-Shadowsocks Password: $ss_password
-Shadowsocks Method: $ss_method"
+    local protocol_info="Shadowsocks Port: ${BOLD}$internal_port${NC} (internal)
+Shadowsocks Password: ${BOLD}$ss_password${NC}
+Shadowsocks Method: ${BOLD}$ss_method${NC}"
     
     display_connection_info "Shadowsocks + ShadowTLS" "$server_ip" "$port" "$shadowtls_password" "$shadowtls_host" "$internal_port" "$protocol_info" "$ss_uri"
     
@@ -284,13 +335,14 @@ Shadowsocks Method: $ss_method"
 setup_xray_shadowtls() {
     local port=$1
     
-    echo "Setting up Xray (Shadowsocks 2022) + ShadowTLS on port $port..."
+    print_header "Setting up Xray (Shadowsocks 2022) + ShadowTLS on port $port"
     
     # Create directory
     mkdir -p shadowtls-xray
     cd shadowtls-xray
     
     # Download compose file and config
+    print_info "Downloading configuration files..."
     wget -O compose.yaml https://raw.githubusercontent.com/missuo/snell-server-docker/refs/heads/master/compose-shadowsocks2022.yaml
     wget -O config.json https://raw.githubusercontent.com/missuo/snell-server-docker/refs/heads/master/config-shadowsocks2022.json
     
@@ -298,10 +350,11 @@ setup_xray_shadowtls() {
     local ss_password=$(generate_password)
     local shadowtls_password=$(generate_password)
     
-    echo "Generated Shadowsocks 2022 password: $ss_password"
-    echo "Generated ShadowTLS password: $shadowtls_password"
+    print_info "Generated Shadowsocks 2022 password: ${BOLD}$ss_password${NC}"
+    print_info "Generated ShadowTLS password: ${BOLD}$shadowtls_password${NC}"
     
     # Update config.json with password - changed delimiter to # to avoid conflicts
+    print_info "Updating configuration files..."
     sed -i "s#\"password\": \"CHANGE_ME\"#\"password\": \"$ss_password\"#g" config.json
     
     # Update compose file with shadowtls password and custom port
@@ -313,7 +366,9 @@ setup_xray_shadowtls() {
     verify_config_password "compose.yaml" "PASSWORD=" "$shadowtls_password" "ShadowTLS"
     
     # Start containers
+    print_info "Starting containers..."
     docker compose up -d
+    print_success "Containers started successfully!"
     
     # Get server IP
     local server_ip=$(get_ipv4)
@@ -325,9 +380,9 @@ setup_xray_shadowtls() {
     local ss_uri=$(generate_ss_uri "$ss_method" "$ss_password" "$server_ip" "$port" "3" "$shadowtls_host" "$shadowtls_password")
     
     # Display connection information with URI and QR code
-    local protocol_info="Shadowsocks 2022 Port: $internal_port (internal)
-Shadowsocks 2022 Password: $ss_password
-Shadowsocks 2022 Method: $ss_method"
+    local protocol_info="Shadowsocks 2022 Port: ${BOLD}$internal_port${NC} (internal)
+Shadowsocks 2022 Password: ${BOLD}$ss_password${NC}
+Shadowsocks 2022 Method: ${BOLD}$ss_method${NC}"
     
     display_connection_info "Xray (Shadowsocks 2022) + ShadowTLS" "$server_ip" "$port" "$shadowtls_password" "$shadowtls_host" "$internal_port" "$protocol_info" "$ss_uri"
     
@@ -336,40 +391,51 @@ Shadowsocks 2022 Method: $ss_method"
 
 # Function to uninstall any ShadowTLS setup
 uninstall_shadowtls() {
-    echo "Uninstalling ShadowTLS setups..."
+    print_header "Uninstalling ShadowTLS setups"
     
     # Check and uninstall Snell + ShadowTLS
     if [ -d "shadowtls-snell" ]; then
-        echo "Removing Snell + ShadowTLS..."
+        print_info "Removing Snell + ShadowTLS..."
         cd shadowtls-snell
         docker compose down
         cd ..
         rm -rf shadowtls-snell
+        print_success "Snell + ShadowTLS removed successfully!"
     fi
     
     # Check and uninstall Shadowsocks + ShadowTLS
     if [ -d "shadowtls-shadowsocks" ]; then
-        echo "Removing Shadowsocks + ShadowTLS..."
+        print_info "Removing Shadowsocks + ShadowTLS..."
         cd shadowtls-shadowsocks
         docker compose down
         cd ..
         rm -rf shadowtls-shadowsocks
+        print_success "Shadowsocks + ShadowTLS removed successfully!"
     fi
     
     # Check and uninstall Xray + ShadowTLS
     if [ -d "shadowtls-xray" ]; then
-        echo "Removing Xray (Shadowsocks 2022) + ShadowTLS..."
+        print_info "Removing Xray (Shadowsocks 2022) + ShadowTLS..."
         cd shadowtls-xray
         docker compose down
         cd ..
         rm -rf shadowtls-xray
+        print_success "Xray (Shadowsocks 2022) + ShadowTLS removed successfully!"
     fi
     
     # Clean up unused Docker resources
-    echo "Cleaning up Docker resources..."
-    docker system prune -af
+    print_header "Cleaning up Docker resources"
+    print_warning "This Action Will Remove All Unused Docker Resources"
+    print_warning "Are You Sure You Want To Continue? (y/n)"
+    read -p "$(echo -e "${YELLOW}Enter your choice (y/n): ${NC}")" confirm
     
-    echo "Uninstallation completed successfully!"
+    if [ "$confirm" = "y" ]; then
+        docker system prune -af
+        print_success "Docker resources cleaned up successfully!"
+    else
+        print_info "Cleanup cancelled. No changes were made."
+    fi
+    print_success "Uninstallation completed successfully!"
 }
 
 # Main function
@@ -381,20 +447,22 @@ main() {
     check_root
     
     # Display welcome message
-    echo "====================================================="
-    echo "       ShadowTLS Proxy Installation Script           "
-    echo "====================================================="
+    echo -e "${BOLD}${MAGENTA}=====================================================${NC}"
+    echo -e "${BOLD}${MAGENTA}       ShadowTLS Proxy Installation Script           ${NC}"
+    echo -e "${BOLD}${MAGENTA}=====================================================${NC}"
     echo ""
-    echo "Please select an option:"
-    echo "1) Install Snell + ShadowTLS (Recommended)"
-    echo "2) Install Shadowsocks + ShadowTLS"
-    echo "3) Install Xray (Shadowsocks 2022) + ShadowTLS (Recommended)"
-    echo "4) Uninstall All ShadowTLS Setups"
-    echo "5) Exit"
+    echo -e "${BOLD}GitHub: ${BLUE}https://github.com/missuo/snell-server-docker${NC}"
+    echo ""
+    echo -e "${BOLD}Please select an option:${NC}"
+    echo -e "${GREEN}1)${NC} Install Snell + ShadowTLS ${YELLOW}(Recommended)${NC}"
+    echo -e "${GREEN}2)${NC} Install Shadowsocks + ShadowTLS"
+    echo -e "${GREEN}3)${NC} Install Xray (Shadowsocks 2022) + ShadowTLS ${YELLOW}(Recommended)${NC}"
+    echo -e "${RED}4)${NC} Uninstall All ShadowTLS Setups"
+    echo -e "${BLUE}5)${NC} Exit"
     echo ""
     
     # Get user choice
-    read -p "Enter your choice (1-5): " choice
+    read -p "$(echo -e "${CYAN}Enter your choice (1-5): ${NC}")" choice
     
     # Process user choice
     case $choice in
@@ -409,7 +477,7 @@ main() {
             default_port=8443
             
             # Ask for custom port
-            read -p "Enter ShadowTLS port (default: $default_port): " custom_port
+            read -p "$(echo -e "${CYAN}Enter ShadowTLS port (default: $default_port): ${NC}")" custom_port
             port=${custom_port:-$default_port}
             
             # Call appropriate setup function
@@ -425,17 +493,17 @@ main() {
             uninstall_shadowtls
             ;;
         5)
-            echo "Exiting. No changes were made."
+            print_info "Exiting. No changes were made."
             exit 0
             ;;
         *)
-            echo "Invalid option. Please run the script again and select a valid option."
+            print_error "Invalid option. Please run the script again and select a valid option."
             exit 1
             ;;
     esac
     
     echo ""
-    echo "Operation completed successfully!"
+    print_success "Operation completed successfully!"
 }
 
 # Run main function
