@@ -64,18 +64,18 @@ docker compose up -d
 docker compose logs
 ```
 
-### Option 3: Xray (Shadowsocks 2022) + ShadowTLS
+### Option 3: Shadowsocks-Rust (Shadowsocks 2022) + ShadowTLS
 
 ```bash
 # Create directory and navigate to it
-mkdir shadowtls-xray
-cd shadowtls-xray
+mkdir shadowtls-shadowsocks-rust
+cd shadowtls-shadowsocks-rust
 
 # Download compose file
-wget -O compose.yaml https://raw.githubusercontent.com/missuo/snell-server-docker/refs/heads/master/compose-shadowsocks2022.yaml
+wget -O compose.yaml https://raw.githubusercontent.com/missuo/snell-server-docker/refs/heads/master/compose-ss-rust.yaml
 
 # Add config.json
-wget -O config.json https://raw.githubusercontent.com/missuo/snell-server-docker/refs/heads/master/config-shadowsocks2022.json
+wget -O config.json https://raw.githubusercontent.com/missuo/snell-server-docker/refs/heads/master/config.json
 
 # Edit the config.json with your configuration
 nano config.json
