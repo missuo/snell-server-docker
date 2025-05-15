@@ -1,0 +1,6 @@
+{
+    "server": "127.0.0.1",
+    "server_port": 24001,
+    "password": "CHANGE_ME",
+    "method": "2022-blake3-aes-256-gcm"
+}

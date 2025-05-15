@@ -330,29 +330,30 @@ Shadowsocks Method: ${BOLD}$ss_method${NC}"
     cd ..
 }
 
-# Function to setup Xray (Shadowsocks 2022) + ShadowTLS
-setup_xray_shadowtls() {
+# Function to setup Shadowsocks-Rust + ShadowTLS
+# Function to setup Shadowsocks-Rust + ShadowTLS
+setup_ss_rust_shadowtls() {
     local port=$1
     
-    print_header "Setting up Xray (Shadowsocks 2022) + ShadowTLS on port $port"
+    print_header "Setting up Shadowsocks-Rust + ShadowTLS on port $port"
     
     # Create directory
-    mkdir -p shadowtls-xray
-    cd shadowtls-xray
+    mkdir -p shadowtls-ss-rust
+    cd shadowtls-ss-rust
     
     # Download compose file and config
     print_info "Downloading configuration files..."
-    wget -O compose.yaml https://raw.githubusercontent.com/missuo/snell-server-docker/refs/heads/master/compose-shadowsocks2022.yaml
-    wget -O config.json https://raw.githubusercontent.com/missuo/snell-server-docker/refs/heads/master/config-shadowsocks2022.json
+    wget -O compose.yaml https://raw.githubusercontent.com/missuo/snell-server-docker/refs/heads/master/compose-ss-rust.yaml
+    wget -O config.json https://raw.githubusercontent.com/missuo/snell-server-docker/refs/heads/master/config.json
     
     # Generate passwords
     local ss_password=$(generate_password)
     local shadowtls_password=$(generate_password)
     
-    print_info "Generated Shadowsocks 2022 password: ${BOLD}$ss_password${NC}"
+    print_info "Generated Shadowsocks-Rust password: ${BOLD}$ss_password${NC}"
     print_info "Generated ShadowTLS password: ${BOLD}$shadowtls_password${NC}"
     
-    # Update config.json with password - changed delimiter to # to avoid conflicts
+    # Update config.json with password
     print_info "Updating configuration files..."
     sed -i "s#\"password\": \"CHANGE_ME\"#\"password\": \"$ss_password\"#g" config.json
     
@@ -361,7 +362,7 @@ setup_xray_shadowtls() {
     sed -i "s#LISTEN=0.0.0.0:8443#LISTEN=0.0.0.0:$port#g" compose.yaml
     
     # Verify passwords in config files
-    verify_config_password "config.json" "\"password\": " "\"$ss_password\"" "Shadowsocks 2022"
+    verify_config_password "config.json" "\"password\": " "\"$ss_password\"" "Shadowsocks-Rust"
     verify_config_password "compose.yaml" "PASSWORD=" "$shadowtls_password" "ShadowTLS"
     
     # Start containers
@@ -372,18 +373,18 @@ setup_xray_shadowtls() {
     # Get server IP
     local server_ip=$(get_ipv4)
     local shadowtls_host="weather-data.apple.com"
-    local ss_method="2022-blake3-chacha20-poly1305"
-    local internal_port="24000"
+    local ss_method="2022-blake3-aes-256-gcm"
+    local internal_port="24001"
     
     # Generate SS URI
     local ss_uri=$(generate_ss_uri "$ss_method" "$ss_password" "$server_ip" "$port" "3" "$shadowtls_host" "$shadowtls_password")
     
     # Display connection information with URI and QR code
-    local protocol_info="Shadowsocks 2022 Port: ${BOLD}$internal_port${NC} (internal)
-Shadowsocks 2022 Password: ${BOLD}$ss_password${NC}
-Shadowsocks 2022 Method: ${BOLD}$ss_method${NC}"
+    local protocol_info="Shadowsocks-Rust Port: ${BOLD}$internal_port${NC} (internal)
+Shadowsocks-Rust Password: ${BOLD}$ss_password${NC}
+Shadowsocks-Rust Method: ${BOLD}$ss_method${NC}"
     
-    display_connection_info "Xray (Shadowsocks 2022) + ShadowTLS" "$server_ip" "$port" "$shadowtls_password" "$shadowtls_host" "$internal_port" "$protocol_info" "$ss_uri"
+    display_connection_info "Shadowsocks-Rust + ShadowTLS" "$server_ip" "$port" "$shadowtls_password" "$shadowtls_host" "$internal_port" "$protocol_info" "$ss_uri"
     
     cd ..
 }
@@ -412,14 +413,14 @@ uninstall_shadowtls() {
         print_success "Shadowsocks + ShadowTLS removed successfully!"
     fi
     
-    # Check and uninstall Xray + ShadowTLS
-    if [ -d "shadowtls-xray" ]; then
-        print_info "Removing Xray (Shadowsocks 2022) + ShadowTLS..."
-        cd shadowtls-xray
+    # Check and uninstall Shadowsocks-Rust + ShadowTLS
+    if [ -d "shadowtls-ss-rust" ]; then
+        print_info "Removing Shadowsocks-Rust + ShadowTLS..."
+        cd shadowtls-ss-rust
         docker compose down
         cd ..
-        rm -rf shadowtls-xray
-        print_success "Xray (Shadowsocks 2022) + ShadowTLS removed successfully!"
+        rm -rf shadowtls-ss-rust
+        print_success "Shadowsocks-Rust + ShadowTLS removed successfully!"
     fi
     
     # Clean up unused Docker resources
@@ -455,7 +456,7 @@ main() {
     echo -e "${BOLD}Please select an option:${NC}"
     echo -e "${GREEN}1)${NC} Install Snell + ShadowTLS ${YELLOW}(Recommended)${NC}"
     echo -e "${GREEN}2)${NC} Install Shadowsocks + ShadowTLS"
-    echo -e "${GREEN}3)${NC} Install Xray (Shadowsocks 2022) + ShadowTLS ${YELLOW}(Recommended)${NC}"
+    echo -e "${GREEN}3)${NC} Install Shadowsocks-Rust + ShadowTLS ${YELLOW}(Recommended)${NC}"
     echo -e "${RED}4)${NC} Uninstall All ShadowTLS Setups"
     echo -e "${BLUE}5)${NC} Exit"
     echo ""
@@ -485,7 +486,7 @@ main() {
             elif [ "$choice" -eq "2" ]; then
                 setup_shadowsocks_shadowtls $port
             elif [ "$choice" -eq "3" ]; then
-                setup_xray_shadowtls $port
+                setup_ss_rust_shadowtls $port
             fi
             ;;
         4)
