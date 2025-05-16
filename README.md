@@ -12,6 +12,8 @@ This repository packages [Snell Server](https://manual.nssurge.com/others/snell.
 
 ## Deployment Options
 
+We strongly recommend using `snell` or `shadowsocks-rust`, as `shadowsocks-rust` supports AEAD-2022 ciphers.
+
 ### One-click Deployment
 
 ```bash
