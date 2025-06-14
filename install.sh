@@ -83,6 +83,10 @@ check_docker() {
 check_required_tools() {
     local missing_tools=()
     
+    # Update apt and install curl and wget
+    print_info "Updating apt and installing curl and wget..."
+    apt-get update && apt-get install -y curl wget
+    
     # Check for qrencode
     if ! command -v qrencode &> /dev/null; then
         missing_tools+=("qrencode")
