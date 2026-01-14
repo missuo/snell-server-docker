@@ -16,6 +16,14 @@ We strongly recommend using `snell` or `shadowsocks-rust`, as `shadowsocks-rust`
 
 ### One-click Deployment
 
+#### Shadowsocks-Rust (Standalone, without Docker)
+
+```bash
+bash <(curl -Ls https://s.ee/ssrust)
+```
+
+#### ShadowTLS + Snell/Shadowsocks (Docker)
+
 ```bash
 bash <(curl -Ls https://ssa.sx/stls)
 ```
