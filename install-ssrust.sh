@@ -103,7 +103,7 @@ get_installed_version() {
 check_requirements() {
     local missing_tools=()
 
-    for tool in curl wget tar openssl; do
+    for tool in curl wget tar openssl qrencode; do
         if ! command -v "$tool" &> /dev/null; then
             missing_tools+=("$tool")
         fi
@@ -114,9 +114,9 @@ check_requirements() {
         if command -v apt-get &> /dev/null; then
             apt-get update && apt-get install -y "${missing_tools[@]}"
         elif command -v yum &> /dev/null; then
-            yum install -y "${missing_tools[@]}"
+            yum install -y epel-release && yum install -y "${missing_tools[@]}"
         elif command -v dnf &> /dev/null; then
-            dnf install -y "${missing_tools[@]}"
+            dnf install -y epel-release && dnf install -y "${missing_tools[@]}"
         else
             print_error "Cannot install required tools. Please install manually: ${missing_tools[*]}"
             exit 1
@@ -422,12 +422,12 @@ show_connection_info() {
     echo -e "${BOLD}Legacy Base64 Format:${NC}"
     echo -e "${CYAN}$legacy_uri${NC}"
 
-    # Generate QR code if qrencode is available
+    # Generate QR code
+    print_header "QR Code (SIP002 Format)"
     if command -v qrencode &> /dev/null; then
-        print_header "QR Code (SIP002 Format)"
         qrencode -t UTF8 "$sip002_uri"
     else
-        print_info "Install qrencode to display QR code: apt install qrencode"
+        print_warning "qrencode not found, QR code cannot be displayed"
     fi
 
     echo -e "${BLUE}===========================================================${NC}"
