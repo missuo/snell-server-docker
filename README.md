@@ -22,6 +22,12 @@ We strongly recommend using `snell` or `shadowsocks-rust`, as `shadowsocks-rust`
 bash <(curl -Ls https://s.ee/ssrust)
 ```
 
+#### Mieru (Standalone, without Docker)
+
+```bash
+bash <(curl -Ls https://s.ee/mieru)
+```
+
 #### ShadowTLS + Snell/Shadowsocks (Docker)
 
 ```bash
