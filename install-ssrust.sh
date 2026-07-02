@@ -80,12 +80,21 @@ detect_arch() {
 }
 
 # Get latest version from GitHub API
+# NOTE: runs inside $(...) — errors must go to stderr, and callers must
+# check the return code (exit here only kills the subshell)
 get_latest_version() {
     local version
     version=$(curl -s "$GITHUB_API" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+
     if [ -z "$version" ]; then
-        print_error "Failed to get latest version from GitHub API"
-        exit 1
+        # Fallback for API rate limiting: /releases/latest redirects to /releases/tag/<version>
+        version=$(curl -sI "https://github.com/${GITHUB_REPO}/releases/latest" \
+            | grep -i '^location:' | sed -E 's#.*/tag/([^[:space:]]+).*#\1#')
+    fi
+
+    if [ -z "$version" ]; then
+        print_error "Failed to get latest version from GitHub" >&2
+        return 1
     fi
     echo "$version"
 }
@@ -99,11 +108,26 @@ get_installed_version() {
     fi
 }
 
+# Map a command name to its package name for the current package manager
+tool_to_package() {
+    local tool="$1"
+    local pm="$2"
+    case "$tool" in
+        xz)
+            # xz lives in xz-utils on Debian/Ubuntu, xz on RHEL-family
+            [ "$pm" = "apt" ] && echo "xz-utils" || echo "xz"
+            ;;
+        *)
+            echo "$tool"
+            ;;
+    esac
+}
+
 # Check required tools
 check_requirements() {
     local missing_tools=()
 
-    for tool in curl wget tar openssl qrencode; do
+    for tool in curl wget tar xz openssl qrencode; do
         if ! command -v "$tool" &> /dev/null; then
             missing_tools+=("$tool")
         fi
@@ -111,16 +135,34 @@ check_requirements() {
 
     if [ ${#missing_tools[@]} -gt 0 ]; then
         print_info "Installing required tools: ${missing_tools[*]}"
+        local packages=()
         if command -v apt-get &> /dev/null; then
-            apt-get update && apt-get install -y "${missing_tools[@]}"
-        elif command -v yum &> /dev/null; then
-            yum install -y epel-release && yum install -y "${missing_tools[@]}"
+            for tool in "${missing_tools[@]}"; do
+                packages+=("$(tool_to_package "$tool" apt)")
+            done
+            apt-get update && apt-get install -y "${packages[@]}"
         elif command -v dnf &> /dev/null; then
-            dnf install -y epel-release && dnf install -y "${missing_tools[@]}"
+            for tool in "${missing_tools[@]}"; do
+                packages+=("$(tool_to_package "$tool" dnf)")
+            done
+            dnf install -y epel-release && dnf install -y "${packages[@]}"
+        elif command -v yum &> /dev/null; then
+            for tool in "${missing_tools[@]}"; do
+                packages+=("$(tool_to_package "$tool" yum)")
+            done
+            yum install -y epel-release && yum install -y "${packages[@]}"
         else
             print_error "Cannot install required tools. Please install manually: ${missing_tools[*]}"
             exit 1
         fi
+
+        # Verify everything is actually available now
+        for tool in "${missing_tools[@]}"; do
+            if ! command -v "$tool" &> /dev/null; then
+                print_error "Failed to install required tool: $tool"
+                exit 1
+            fi
+        done
     fi
 }
 
@@ -213,7 +255,8 @@ install_ssrust() {
 
     # Get latest version
     print_info "Fetching latest version..."
-    local version=$(get_latest_version)
+    local version
+    version=$(get_latest_version) || exit 1
     print_info "Latest version: $version"
 
     # Build download URL (using musl for better compatibility)
@@ -499,8 +542,10 @@ status_service() {
 update_ssrust() {
     print_header "Updating Shadowsocks-Rust"
 
-    local current_version=$(get_installed_version)
-    local latest_version=$(get_latest_version)
+    local current_version
+    local latest_version
+    current_version=$(get_installed_version)
+    latest_version=$(get_latest_version) || exit 1
 
     # Remove 'v' prefix for comparison
     local current_clean=${current_version#v}
