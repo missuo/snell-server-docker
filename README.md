@@ -117,8 +117,11 @@ Add the following to your Surge configuration:
 
 ```ini
 [Proxy]
-my-snell = snell, your-server-ip, 8888, psk=your-snell-password, version=4, tfo=true, reuse=true, shadow-tls-password=shadowtls-pass, shadow-tls-version=3, shadow-tls-sni=weather-data.apple.com
+my-snell = snell, your-server-ip, 8888, psk=your-snell-password, version=6, tfo=true, reuse=true, shadow-tls-password=shadowtls-pass, shadow-tls-version=3, shadow-tls-sni=weather-data.apple.com
 ```
+
+> [!NOTE]
+> Snell v6 is **not** backward compatible with v4/v5 clients. The `latest` image ships Snell v6, so set `version=6` in Surge. If you are still running a v4/v5 server image, keep `version=4` instead.
 
 #### For Shadowsocks + ShadowTLS:
 
