@@ -94,7 +94,7 @@ get_installed_version() {
 # Required tools
 check_requirements() {
     local missing=()
-    for tool in curl wget; do
+    for tool in curl wget openssl; do
         command -v "$tool" &> /dev/null || missing+=("$tool")
     done
 
@@ -119,6 +119,68 @@ get_ipv4() {
     curl -s -4 --connect-timeout 5 ip.sb 2>/dev/null || \
     curl -s -4 --connect-timeout 5 ipinfo.io/ip 2>/dev/null || \
     echo "YOUR_SERVER_IP"
+}
+
+# Address clients should connect to. Behind NAT / relay entries the detected
+# egress IP is wrong, so MIERU_SERVER_ADDR or the saved install answer wins.
+get_server_addr() {
+    if [ -n "${MIERU_SERVER_ADDR:-}" ]; then
+        echo "$MIERU_SERVER_ADDR"
+        return
+    fi
+    local saved=""
+    [ -f "$META_FILE" ] && saved=$(grep '^server_addr=' "$META_FILE" | cut -d= -f2-)
+    if [ -n "$saved" ]; then
+        echo "$saved"
+    else
+        get_ipv4
+    fi
+}
+
+# join_by "," a b c -> a,b,c
+join_by() {
+    local IFS="$1"
+    shift
+    echo "$*"
+}
+
+# Escape a string for embedding inside a JSON string literal
+json_escape() {
+    local s="$1"
+    s=${s//\\/\\\\}
+    s=${s//\"/\\\"}
+    echo "$s"
+}
+
+# mieru derives keys from the system time, so a skewed clock breaks every connection
+check_time_sync() {
+    command -v timedatectl &> /dev/null || return 0
+    if [ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" != "yes" ]; then
+        print_warning "System clock is not NTP-synchronized. mieru requires client and server clocks to be in sync;"
+        print_warning "enable it with: timedatectl set-ntp true (or install chrony / systemd-timesyncd)"
+    fi
+}
+
+# Write the config file into mita. `mita replace config` (v3.38.0+) replaces the
+# whole saved config; `mita apply config` merges and keeps users that are no
+# longer in the file, so it is only a fallback for old versions.
+apply_server_config() {
+    if mita help 2>&1 | grep -q "replace config"; then
+        mita replace config "$CONFIG_FILE"
+    else
+        print_warning "This mita version has no 'replace config'; falling back to 'apply config' (existing users are kept)"
+        mita apply config "$CONFIG_FILE"
+    fi
+}
+
+# Start the proxy and report whether it actually reached RUNNING
+start_proxy() {
+    mita start > /dev/null 2>&1 || true
+    if mita status 2>/dev/null | grep -q "RUNNING"; then
+        print_success "Proxy is running"
+    else
+        print_warning "Proxy is not in RUNNING state — check 'mita status' and 'journalctl -u $SERVICE_NAME -n 30'"
+    fi
 }
 
 # Generate strong password
@@ -283,7 +345,7 @@ create_config() {
         if [ "$i" -gt 1 ]; then
             users_json="${users_json},"$'\n'
         fi
-        users_json="${users_json}        {"$'\n'"            \"name\": \"$uname\","$'\n'"            \"password\": \"$upass\""$'\n'"        }"
+        users_json="${users_json}        {"$'\n'"            \"name\": \"$(json_escape "$uname")\","$'\n'"            \"password\": \"$(json_escape "$upass")\""$'\n'"        }"
 
         users_summary="${users_summary}  - ${uname} / ${upass}\n"
 
@@ -293,13 +355,100 @@ create_config() {
         fi
     done
 
+    # Client-facing address (used only for the share link)
+    echo ""
+    echo -e "${BOLD}Client-facing server address:${NC}"
+    echo -e "${YELLOW}Behind NAT or a relay/IPLC entry, enter the entry IP/domain clients connect to.${NC}"
+    local default_addr="${MIERU_SERVER_ADDR:-}"
+    if [ -z "$default_addr" ] && [ -f "$META_FILE" ]; then
+        default_addr=$(grep '^server_addr=' "$META_FILE" | cut -d= -f2-)
+    fi
+    read -p "$(echo -e "${CYAN}Server address (default: ${default_addr:-auto-detect public IPv4}): ${NC}")" server_addr
+    server_addr=${server_addr:-$default_addr}
+
+    # Listen address (v3.37.0+)
+    echo ""
+    read -p "$(echo -e "${CYAN}Listen IP address (leave empty to listen on all interfaces): ${NC}")" listen_ip
+
+    # Low entropy traffic pattern (v3.35.0+)
+    echo ""
+    echo -e "${BOLD}Low entropy mode${NC} ${YELLOW}(lowers ciphertext entropy against DPI; costs extra traffic and CPU):${NC}"
+    echo -e "${GREEN}1)${NC} Off ${YELLOW}(default)${NC}"
+    echo -e "${GREEN}2)${NC} 32 data bits / 64 ${YELLOW}(lowest entropy, +100% traffic)${NC}"
+    echo -e "${GREEN}3)${NC} 40 data bits / 64"
+    echo -e "${GREEN}4)${NC} 48 data bits / 64"
+    echo -e "${GREEN}5)${NC} 56 data bits / 64 ${YELLOW}(+14% traffic)${NC}"
+    read -p "$(echo -e "${CYAN}Enter your choice (1-5, default: 1): ${NC}")" le_choice
+    local low_entropy_mode=""
+    case "${le_choice:-1}" in
+        2) low_entropy_mode="LOW_ENTROPY_MODE_32" ;;
+        3) low_entropy_mode="LOW_ENTROPY_MODE_40" ;;
+        4) low_entropy_mode="LOW_ENTROPY_MODE_48" ;;
+        5) low_entropy_mode="LOW_ENTROPY_MODE_56" ;;
+    esac
+
+    # Padding traffic pattern (v3.34.0+)
+    echo ""
+    read -p "$(echo -e "${CYAN}Customize padding lengths? (y/N): ${NC}")" pad_choice
+    local pad_middle="" pad_end=""
+    if [ "$pad_choice" = "y" ] || [ "$pad_choice" = "Y" ]; then
+        read -p "$(echo -e "${CYAN}  Max middle padding bytes (0-255, 0 disables): ${NC}")" pad_middle
+        read -p "$(echo -e "${CYAN}  Max end padding bytes (0-255, 0 disables): ${NC}")" pad_end
+        for v in "$pad_middle" "$pad_end"; do
+            if [ -n "$v" ] && { ! [[ "$v" =~ ^[0-9]+$ ]] || [ "$v" -gt 255 ]; }; then
+                print_error "Padding length must be between 0 and 255"
+                exit 1
+            fi
+        done
+    fi
+
+    # Advanced settings (v3.39.0 tcpIdleTimeout, v3.31.0 userHintIsMandatory)
+    echo ""
+    read -p "$(echo -e "${CYAN}TCP idle timeout, e.g. 15m or 1h (min 1m; leave empty for none): ${NC}")" tcp_idle_timeout
+    if [ -n "$tcp_idle_timeout" ] && ! [[ "$tcp_idle_timeout" =~ ^[0-9]+(s|m|h)$ ]]; then
+        print_error "Invalid duration: $tcp_idle_timeout (use e.g. 90s, 15m, 1h)"
+        exit 1
+    fi
+    read -p "$(echo -e "${CYAN}Require user hint, rejecting clients older than v3.31.0? (y/N): ${NC}")" hint_choice
+    local user_hint_mandatory="false"
+    if [ "$hint_choice" = "y" ] || [ "$hint_choice" = "Y" ]; then
+        user_hint_mandatory="true"
+    fi
+
     # MTU (only meaningful for UDP, but harmless to include)
     local mtu=1400
+
+    # Optional JSON sections, each emitted with a trailing comma
+    local extra_json=""
+    if [ -n "$listen_ip" ]; then
+        extra_json="${extra_json}    \"listenIPAddress\": \"$(json_escape "$listen_ip")\","$'\n'
+    fi
+    local adv_fields=()
+    [ -n "$tcp_idle_timeout" ] && adv_fields+=("\"tcpIdleTimeout\": \"$tcp_idle_timeout\"")
+    [ "$user_hint_mandatory" = "true" ] && adv_fields+=("\"userHintIsMandatory\": true")
+    if [ ${#adv_fields[@]} -gt 0 ]; then
+        extra_json="${extra_json}    \"advancedSettings\": {$(join_by , "${adv_fields[@]}")},"$'\n'
+    fi
+    local tp_fields=()
+    if [ -n "$low_entropy_mode" ]; then
+        # Random non-zero rotation so the padding-bit mask moves between chunks
+        local rotation="LOW_ENTROPY_MASK_ROTATE_RIGHT_$(( RANDOM % 15 + 1 ))"
+        tp_fields+=("\"lowEntropy\": {\"mode\": \"$low_entropy_mode\", \"maskRotation\": \"$rotation\"}")
+    fi
+    local pad_fields=()
+    [ -n "$pad_middle" ] && pad_fields+=("\"maxMiddlePaddingLen\": $pad_middle")
+    [ -n "$pad_end" ] && pad_fields+=("\"maxEndPaddingLen\": $pad_end")
+    if [ ${#pad_fields[@]} -gt 0 ]; then
+        tp_fields+=("\"padding\": {$(join_by , "${pad_fields[@]}")}")
+    fi
+    if [ ${#tp_fields[@]} -gt 0 ]; then
+        extra_json="${extra_json}    \"trafficPattern\": {$(join_by , "${tp_fields[@]}")},"$'\n'
+    fi
 
     # Compose JSON
     cat > "$CONFIG_FILE" <<EOF
 {
-    "portBindings": [
+${extra_json}    "portBindings": [
 $(echo -e "$port_binding_json")
     ],
     "users": [
@@ -318,6 +467,7 @@ EOF
         echo "port=$display_port"
         echo "first_user=$first_user_name"
         echo "first_pass=$first_user_pass"
+        echo "server_addr=$server_addr"
         # Re-write version line if present
         grep "^version=" "$META_FILE" 2>/dev/null || true
     } > "${META_FILE}.tmp" && mv "${META_FILE}.tmp" "$META_FILE"
@@ -329,7 +479,7 @@ EOF
 
     # Apply config
     print_info "Applying configuration..."
-    if ! mita apply config "$CONFIG_FILE"; then
+    if ! apply_server_config; then
         print_error "Failed to apply configuration. Check the file at $CONFIG_FILE"
         exit 1
     fi
@@ -430,7 +580,7 @@ show_connection_info() {
         return 1
     fi
 
-    local server_ip=$(get_ipv4)
+    local server_ip=$(get_server_addr)
     local protocol port
     if [ -f "$META_FILE" ]; then
         protocol=$(grep '^protocol=' "$META_FILE" | cut -d= -f2)
@@ -440,6 +590,27 @@ show_connection_info() {
     echo -e "${BOLD}Server Address:${NC} $server_ip"
     echo -e "${BOLD}Port:${NC}           $port"
     echo -e "${BOLD}Protocol:${NC}       $protocol"
+    if command -v python3 &> /dev/null; then
+        python3 - "$CONFIG_FILE" <<'PYEOF'
+import json, sys
+cfg = json.load(open(sys.argv[1]))
+listen = cfg.get("listenIPAddress")
+if listen:
+    print("\033[1mListen IP:\033[0m      %s" % listen)
+tp = cfg.get("trafficPattern", {})
+le = tp.get("lowEntropy", {}).get("mode")
+if le:
+    print("\033[1mLow entropy:\033[0m    %s (%s)" % (le, tp["lowEntropy"].get("maskRotation", "")))
+pad = tp.get("padding")
+if pad:
+    print("\033[1mPadding:\033[0m        middle<=%s end<=%s" % (pad.get("maxMiddlePaddingLen", "default"), pad.get("maxEndPaddingLen", "default")))
+adv = cfg.get("advancedSettings", {})
+if adv.get("tcpIdleTimeout"):
+    print("\033[1mTCP idle:\033[0m       %s" % adv["tcpIdleTimeout"])
+if adv.get("userHintIsMandatory"):
+    print("\033[1mUser hint:\033[0m      mandatory (clients < v3.31.0 rejected)")
+PYEOF
+    fi
     echo ""
     echo -e "${BOLD}Users (name / password):${NC}"
 
@@ -474,7 +645,7 @@ for b in bindings:
         qs_parts.append(('port', str(b['port'])))
     qs_parts.append(('protocol', b.get('protocol','TCP')))
 qs_parts.insert(0, ('profile','default'))
-qs_parts.append(('mtu','1400'))
+qs_parts.append(('mtu', str(cfg.get('mtu', 1400))))
 qs = urllib.parse.urlencode(qs_parts)
 server = "$server_ip"
 for u in cfg.get('users', []):
@@ -648,7 +819,19 @@ reconfigure() {
     configure_firewall
     systemctl restart "$SERVICE_NAME" || true
     sleep 1
-    mita start > /dev/null 2>&1 || true
+    start_proxy
+    show_connection_info
+}
+
+do_install() {
+    install_mita_package
+    check_time_sync
+    create_config
+    configure_firewall
+    enable_service
+    systemctl start "$SERVICE_NAME"
+    sleep 1
+    start_proxy
     show_connection_info
 }
 
@@ -698,16 +881,7 @@ show_menu() {
     read -p "$(echo -e "${CYAN}Enter your choice (0-12): ${NC}")" choice
 
     case $choice in
-        1)
-            install_mita_package
-            create_config
-            configure_firewall
-            enable_service
-            systemctl start "$SERVICE_NAME"
-            sleep 1
-            mita start > /dev/null 2>&1 || true
-            show_connection_info
-            ;;
+        1)  do_install ;;
         2)  update_mieru ;;
         3)  uninstall_mieru ;;
         4)  reconfigure ;;
@@ -728,16 +902,7 @@ main() {
     check_root
 
     case "${1:-}" in
-        install)
-            install_mita_package
-            create_config
-            configure_firewall
-            enable_service
-            systemctl start "$SERVICE_NAME"
-            sleep 1
-            mita start > /dev/null 2>&1 || true
-            show_connection_info
-            ;;
+        install)      do_install ;;
         reconfigure)  reconfigure ;;
         update)       update_mieru ;;
         uninstall)    uninstall_mieru ;;
